@@ -46,13 +46,8 @@ export interface FinancialAnalysis {
   keyRisks: string[];
 }
 
-export const AVAILABLE_MODELS = [
-  { id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', description: 'Fast & cost-effective' },
-  { id: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', description: 'Most capable' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', description: 'Fastest & cheapest' },
-] as const;
-
-export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
+// Sonnet is used for all financial analysis — requires deep reasoning and structured output
+const ANALYSIS_MODEL = 'claude-sonnet-4-5-20250929';
 
 export async function analyzeFinancials(
   documentsText: string,
@@ -61,7 +56,6 @@ export async function analyzeFinancials(
   stage: string,
   yearEnd: string,
   inputType: 'management' | 'bank',
-  model: string = 'claude-sonnet-4-5-20250929'
 ): Promise<FinancialAnalysis> {
   const client = new Anthropic();
 
@@ -149,20 +143,19 @@ Provide a detailed financial health analysis. Return ONLY a valid JSON object wi
 Important: Base your analysis on the actual document content. If data is limited (e.g. bank statements only), estimate where needed and note assumptions. Always provide useful insights even with partial data. Make sure monthly revenue/expense numbers are realistic relative to total revenue.`;
 
   const message = await client.messages.create({
-    model,
+    model: ANALYSIS_MODEL,
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
   });
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
-  
-  // Clean up response - remove any markdown code blocks if present
+
+  // Clean up response — remove any markdown code blocks if present
   const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  
+
   try {
     return JSON.parse(cleanJson) as FinancialAnalysis;
   } catch (e) {
-    // Return a fallback if parsing fails
     console.error('JSON parse error:', e, 'Response:', cleanJson.substring(0, 500));
     throw new Error('Failed to parse AI analysis response');
   }

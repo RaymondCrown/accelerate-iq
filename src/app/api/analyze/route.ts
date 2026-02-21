@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const stage = formData.get('stage') as string || 'Growth Stage';
     const yearEnd = formData.get('yearEnd') as string || 'December 2025';
     const inputType = (formData.get('inputType') as string || 'management') as 'management' | 'bank';
-    const model = formData.get('model') as string || 'claude-sonnet-4-5-20250929';
+    // Models are fixed per task: Haiku for bank conversion, Sonnet for analysis
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: 'No files uploaded' }, { status: 400 });
@@ -54,7 +54,6 @@ export async function POST(req: NextRequest) {
           combinedText,
           businessName,
           sector,
-          model
         );
         textToAnalyse = converted.convertedText;
         conversionNote = `[Converted from bank statements covering ${converted.periodCovered}] `;
@@ -73,8 +72,7 @@ export async function POST(req: NextRequest) {
         sector,
         stage,
         yearEnd,
-        inputType === 'bank' ? 'management' : inputType, // treat converted output as management accounts
-        model
+        inputType === 'bank' ? 'management' : inputType, // treat converted bank output as management accounts
       );
       // Prepend conversion note to summary if applicable
       if (conversionNote) {

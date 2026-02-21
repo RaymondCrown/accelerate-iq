@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { AVAILABLE_MODELS, type ModelId } from '@/lib/analyzeFinancials';
 
 const SECTORS = [
   'Food & Beverage', 'Retail', 'Technology', 'Manufacturing',
@@ -26,7 +25,6 @@ export default function UploadScreen({ inputType, onSubmit, onBack }: Props) {
   const [sector, setSector] = useState(SECTORS[0]);
   const [stage, setStage] = useState(STAGES[2]);
   const [yearEnd, setYearEnd] = useState('February 2025');
-  const [model, setModel] = useState<ModelId>(AVAILABLE_MODELS[0].id);
 
   const onDrop = useCallback((accepted: File[]) => {
     setFiles(prev => [...prev, ...accepted]);
@@ -57,7 +55,6 @@ export default function UploadScreen({ inputType, onSubmit, onBack }: Props) {
     fd.append('stage', stage);
     fd.append('yearEnd', yearEnd);
     fd.append('inputType', inputType);
-    fd.append('model', model);
     onSubmit(fd);
   };
 
@@ -167,27 +164,16 @@ export default function UploadScreen({ inputType, onSubmit, onBack }: Props) {
         </div>
       </div>
 
-      {/* AI Model selector */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-8">
-        <div className="text-sm font-bold text-brand-blue mb-4">
-          🤖 Analysis Model
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {AVAILABLE_MODELS.map(m => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setModel(m.id)}
-              className={`text-left p-4 rounded-lg border-2 transition-all ${
-                model === m.id
-                  ? 'border-brand-blue bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className={`text-sm font-semibold ${model === m.id ? 'text-brand-blue' : 'text-gray-700'}`}>{m.label}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{m.description}</div>
-            </button>
-          ))}
+      {/* Model info — fixed per task */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-8 flex items-start gap-3">
+        <span className="text-xl">🤖</span>
+        <div>
+          <div className="text-sm font-semibold text-brand-blue">AI Models (automatic)</div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            {inputType === 'bank'
+              ? 'Claude Haiku will extract & convert your bank statements, then Claude Sonnet will generate the financial analysis.'
+              : 'Claude Sonnet will analyse your management accounts and generate the financial report.'}
+          </div>
         </div>
       </div>
 

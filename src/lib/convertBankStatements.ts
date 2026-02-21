@@ -8,11 +8,13 @@ export interface ManagementAccountsOutput {
   totalDebits: number;
 }
 
+// Haiku is used here — this is a fast data-extraction task (no deep reasoning needed)
+const CONVERSION_MODEL = 'claude-haiku-4-5-20251001';
+
 export async function convertBankStatementsToManagementAccounts(
   bankStatementText: string,
   businessName: string,
   sector: string,
-  model: string = 'claude-sonnet-4-5-20250929'
 ): Promise<ManagementAccountsOutput> {
   const client = new Anthropic();
 
@@ -86,7 +88,7 @@ Irregular/one-off items: [list any unusual transactions]
 === END OF MANAGEMENT ACCOUNTS ===`;
 
   const message = await client.messages.create({
-    model,
+    model: CONVERSION_MODEL,
     max_tokens: 4096,
     messages: [{ role: 'user', content: extractionPrompt }],
   });

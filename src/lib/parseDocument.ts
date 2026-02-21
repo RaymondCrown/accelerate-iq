@@ -11,12 +11,14 @@ export async function parseDocument(buffer: Buffer, filename: string): Promise<P
 
   if (ext === 'pdf') {
     try {
-      // Dynamic import to avoid SSR issues
-      const pdfParseModule = await import('pdf-parse');
-      const pdfParse = (pdfParseModule as any).default || (pdfParseModule as any);
+      // Use the internal lib path to avoid pdf-parse's test-file access issue in serverless
+      // (the default import tries to read local test PDFs during init, which crashes in serverless)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>;
       const data = await pdfParse(buffer);
       return { text: data.text, type: 'pdf', filename };
     } catch (e) {
+      console.error('PDF parse error:', e);
       return { text: `[PDF parsing error: ${e}]`, type: 'pdf', filename };
     }
   }
@@ -40,6 +42,6 @@ export async function parseDocument(buffer: Buffer, filename: string): Promise<P
     return { text: buffer.toString('utf-8'), type: 'csv', filename };
   }
 
-  // Try as text
+  // Try as plain text
   return { text: buffer.toString('utf-8'), type: 'unknown', filename };
 }
