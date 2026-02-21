@@ -28,31 +28,51 @@ export default function Home() {
     setStep('processing');
     setError(null);
     try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) {
-        // Server may return HTML on timeout/gateway errors — handle gracefully
-        let errorMessage = `Analysis failed (${response.status})`;
-        try {
-          const contentType = response.headers.get('content-type') || '';
-          if (contentType.includes('application/json')) {
-            const err = await response.json();
-            errorMessage = err.error || errorMessage;
-          } else {
-            const text = await response.text();
-            // Extract a useful message from HTML error pages if possible
-            const match = text.match(/<title>([^<]+)<\/title>/i);
-            errorMessage = match ? match[1] : errorMessage;
-            if (response.status === 504 || response.status === 502) {
-              errorMessage = 'Analysis timed out. Processing is taking too long on this server. Please try again — if it keeps happening, try submitting fewer files at a time (e.g. 6 months instead of 12).';
-            }
+      const files        = formData.getAll('files') as File[];
+      const businessName = formData.get('businessName') as string;
+      const sector       = formData.get('sector')       as string;
+      const stage        = formData.get('stage')        as string;
+      const yearEnd      = formData.get('yearEnd')      as string;
+      const inputType    = formData.get('inputType')    as string;
+
+      // ── Phase 1: extract each file individually (small requests, parallel) ──
+      const extractions = await Promise.all(
+        files.map(async (file) => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('businessName', businessName);
+          fd.append('inputType', inputType);
+          const res = await fetch('/api/extract', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            throw new Error(err.error || `Failed to extract ${file.name}`);
           }
-        } catch { /* keep default errorMessage */ }
+          return res.json();
+        })
+      );
+
+      // ── Phase 2: analyse the extracted text (no files, tiny JSON payload) ──
+      const analyzeRes = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessName, sector, stage, yearEnd, inputType, extractions }),
+      });
+
+      if (!analyzeRes.ok) {
+        let errorMessage = `Analysis failed (${analyzeRes.status})`;
+        try {
+          const ct = analyzeRes.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const err = await analyzeRes.json();
+            errorMessage = err.error || errorMessage;
+          } else if (analyzeRes.status === 504 || analyzeRes.status === 502) {
+            errorMessage = 'Analysis timed out. Please try again.';
+          }
+        } catch { /* keep default */ }
         throw new Error(errorMessage);
       }
-      const result: FinancialAnalysis = await response.json();
+
+      const result: FinancialAnalysis = await analyzeRes.json();
       setAnalysis(result);
       setStep('dashboard');
     } catch (e) {
