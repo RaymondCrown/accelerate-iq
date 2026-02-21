@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { AVAILABLE_MODELS } from '@/lib/analyzeFinancials';
+import { AVAILABLE_MODELS, type ModelId } from '@/lib/analyzeFinancials';
 
 const SECTORS = [
   'Food & Beverage', 'Retail', 'Technology', 'Manufacturing',
@@ -26,7 +26,7 @@ export default function UploadScreen({ inputType, onSubmit, onBack }: Props) {
   const [sector, setSector] = useState(SECTORS[0]);
   const [stage, setStage] = useState(STAGES[2]);
   const [yearEnd, setYearEnd] = useState('February 2025');
-  const [model, setModel] = useState(AVAILABLE_MODELS[0].id);
+  const [model, setModel] = useState<ModelId>(AVAILABLE_MODELS[0].id);
 
   const onDrop = useCallback((accepted: File[]) => {
     setFiles(prev => [...prev, ...accepted]);
