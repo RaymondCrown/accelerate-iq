@@ -33,8 +33,24 @@ export default function Home() {
         body: formData,
       });
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Analysis failed');
+        // Server may return HTML on timeout/gateway errors — handle gracefully
+        let errorMessage = `Analysis failed (${response.status})`;
+        try {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const err = await response.json();
+            errorMessage = err.error || errorMessage;
+          } else {
+            const text = await response.text();
+            // Extract a useful message from HTML error pages if possible
+            const match = text.match(/<title>([^<]+)<\/title>/i);
+            errorMessage = match ? match[1] : errorMessage;
+            if (response.status === 504 || response.status === 502) {
+              errorMessage = 'Analysis timed out. The bank statement conversion is taking too long — try uploading fewer files or use a faster model.';
+            }
+          }
+        } catch { /* keep default errorMessage */ }
+        throw new Error(errorMessage);
       }
       const result: FinancialAnalysis = await response.json();
       setAnalysis(result);

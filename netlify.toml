@@ -5,5 +5,9 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Increase serverless function timeout (max 26s on free plan, up to 900s on Pro)
+[functions]
+  node_bundler = "esbuild"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"

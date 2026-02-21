@@ -3,8 +3,9 @@ import { parseDocument } from '@/lib/parseDocument';
 import { analyzeFinancials } from '@/lib/analyzeFinancials';
 import { convertBankStatementsToManagementAccounts } from '@/lib/convertBankStatements';
 
-export const maxDuration = 120; // 2 minutes
+export const maxDuration = 300; // 5 minutes (Vercel/Netlify Pro)
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
