@@ -46,7 +46,7 @@ export default function Home() {
             const match = text.match(/<title>([^<]+)<\/title>/i);
             errorMessage = match ? match[1] : errorMessage;
             if (response.status === 504 || response.status === 502) {
-              errorMessage = 'Analysis timed out. The bank statement conversion is taking too long — try uploading fewer files or use a faster model.';
+              errorMessage = 'Analysis timed out. Processing is taking too long on this server. Please try again — if it keeps happening, try submitting fewer files at a time (e.g. 6 months instead of 12).';
             }
           }
         } catch { /* keep default errorMessage */ }

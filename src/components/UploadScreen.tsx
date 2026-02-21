@@ -98,7 +98,7 @@ export default function UploadScreen({ inputType, onSubmit, onBack }: Props) {
       {/* Uploaded files */}
       {files.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
-          <div className="text-sm font-bold text-brand-blue mb-3">📎 Uploaded Files</div>
+          <div className="text-sm font-bold text-brand-blue mb-3">📎 Uploaded Files ({files.length})</div>
           <div className="flex flex-col gap-2">
             {files.map((f, i) => (
               <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
@@ -112,6 +112,12 @@ export default function UploadScreen({ inputType, onSubmit, onBack }: Props) {
               </div>
             ))}
           </div>
+          {/* Warn if many PDFs uploaded for bank statements */}
+          {inputType === 'bank' && files.filter(f => f.name.endsWith('.pdf')).length > 6 && (
+            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
+              ⏱ <strong>Note:</strong> Each PDF is processed in parallel — {files.length} files will take about 20–30 seconds. This works best with up to 12 months.
+            </div>
+          )}
         </div>
       )}
 
