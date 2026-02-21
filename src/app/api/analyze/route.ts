@@ -30,9 +30,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No extracted data provided' }, { status: 400 });
     }
 
-    // Check API key
+    // Check API key — return clearly-labelled demo data if not configured
     if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
-      return NextResponse.json(getMockAnalysis(businessName, sector, stage, yearEnd));
+      const mock = getMockAnalysis(businessName, sector, stage, yearEnd);
+      mock.healthSummary = `⚠️ DEMO MODE — No API key configured on this server. Set ANTHROPIC_API_KEY in your Vercel environment variables and redeploy. ${mock.healthSummary}`;
+      return NextResponse.json(mock);
     }
 
     // Build combined text from extractions
