@@ -66,7 +66,7 @@ export default function Home() {
           <UploadScreen inputType={inputType} onSubmit={handleUploadComplete} onBack={() => setStep('choose')} />
         )}
         {step === 'processing' && (
-          <ProcessingScreen />
+          <ProcessingScreen inputType={inputType} />
         )}
         {step === 'dashboard' && analysis && (
           <DashboardScreen

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDocument } from '@/lib/parseDocument';
 import { analyzeFinancials } from '@/lib/analyzeFinancials';
+import { convertBankStatementsToManagementAccounts } from '@/lib/convertBankStatements';
 
 export const maxDuration = 120; // 2 minutes
 export const dynamic = 'force-dynamic';
@@ -39,17 +40,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(getMockAnalysis(businessName, sector, stage, yearEnd));
     }
 
+    // For bank statements: run two-stage pipeline
+    // Stage 1 — Convert bank statements → management accounts
+    // Stage 2 — Analyse the converted management accounts
+    let textToAnalyse = combinedText;
+    let conversionNote = '';
+
+    if (inputType === 'bank') {
+      try {
+        console.log('Bank statements detected — running conversion to management accounts...');
+        const converted = await convertBankStatementsToManagementAccounts(
+          combinedText,
+          businessName,
+          sector,
+          model
+        );
+        textToAnalyse = converted.convertedText;
+        conversionNote = `[Converted from bank statements covering ${converted.periodCovered}] `;
+        console.log(`Conversion complete. Period: ${converted.periodCovered}`);
+      } catch (conversionError) {
+        console.error('Bank statement conversion failed, proceeding with raw text:', conversionError);
+        // Fall through and analyse raw bank statement text directly
+      }
+    }
+
     // Analyse with Claude
     try {
       const analysis = await analyzeFinancials(
-        combinedText,
+        textToAnalyse,
         businessName,
         sector,
         stage,
         yearEnd,
-        inputType,
+        inputType === 'bank' ? 'management' : inputType, // treat converted output as management accounts
         model
       );
+      // Prepend conversion note to summary if applicable
+      if (conversionNote) {
+        analysis.healthSummary = conversionNote + analysis.healthSummary;
+      }
       return NextResponse.json(analysis);
     } catch (apiError) {
       console.error('AI analysis failed, falling back to demo data:', apiError);
