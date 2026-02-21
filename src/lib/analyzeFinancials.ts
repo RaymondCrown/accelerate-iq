@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import * as XLSX from 'xlsx';
 
 export interface FinancialAnalysis {
   businessName: string;
@@ -49,8 +50,13 @@ export interface FinancialAnalysis {
 // Sonnet is used for all financial analysis — requires deep reasoning and structured output
 const ANALYSIS_MODEL = 'claude-sonnet-4-5-20250929';
 
+/**
+ * Analyse financial documents. Accepts either:
+ *   - An array of raw file buffers (PDFs sent as document blocks, Excel/CSV as text)
+ *   - A plain text string (e.g. output from the bank statement conversion step)
+ */
 export async function analyzeFinancials(
-  documentsText: string,
+  input: Array<{ buffer: Buffer; filename: string }> | string,
   businessName: string,
   sector: string,
   stage: string,
@@ -59,19 +65,16 @@ export async function analyzeFinancials(
 ): Promise<FinancialAnalysis> {
   const client = new Anthropic();
 
-  const prompt = `You are a senior financial analyst at an entrepreneurial accelerator. Analyse the following financial documents for ${businessName} and provide a comprehensive assessment.
+  const promptSuffix = `You are a senior financial analyst at an entrepreneurial accelerator. Analyse the financial documents above for ${businessName} and provide a comprehensive assessment.
 
 Business Context:
 - Business Name: ${businessName}
 - Sector: ${sector}
 - Stage: ${stage}
 - Financial Year End: ${yearEnd}
-- Document Type: ${inputType === 'management' ? 'Management Accounts' : 'Bank Statements'}
+- Document Type: ${inputType === 'management' ? 'Management Accounts' : 'Converted Bank Statements'}
 
-Documents Content:
-${documentsText.substring(0, 15000)}
-
-Provide a detailed financial health analysis. Return ONLY a valid JSON object with this exact structure (no markdown, no code blocks, just raw JSON):
+Provide a detailed financial health analysis. Return ONLY a valid JSON object (no markdown, no code blocks, just raw JSON):
 
 {
   "businessName": "${businessName}",
@@ -80,8 +83,8 @@ Provide a detailed financial health analysis. Return ONLY a valid JSON object wi
   "healthGrade": "<Excellent|Good|Moderate|Concerning|Critical>",
   "healthSummary": "<2-sentence summary of overall financial health>",
   "kpis": {
-    "revenue": "<formatted revenue e.g. R 2.4M or estimated if bank statements>",
-    "revenueChange": "<e.g. ↑ 18% YoY or N/A if only one period>",
+    "revenue": "<formatted revenue e.g. R 2.4M>",
+    "revenueChange": "<e.g. ↑ 18% YoY or N/A>",
     "revenueChangePositive": <true/false>,
     "grossMargin": "<e.g. 34%>",
     "grossMarginVsSector": "<e.g. ↓ 4pp below sector avg (38%)>",
@@ -114,43 +117,78 @@ Provide a detailed financial health analysis. Return ONLY a valid JSON object wi
     {"month": "Dec", "revenue": <number>, "expenses": <number>}
   ],
   "recommendations": [
-    {
-      "priority": "high",
-      "title": "<short title>",
-      "description": "<1-2 sentence actionable recommendation>"
-    },
-    {
-      "priority": "medium",
-      "title": "<short title>",
-      "description": "<1-2 sentence actionable recommendation>"
-    },
-    {
-      "priority": "low",
-      "title": "<short title>",
-      "description": "<1-2 sentence actionable recommendation>"
-    }
+    {"priority": "high",   "title": "<title>", "description": "<1-2 sentence recommendation>"},
+    {"priority": "medium", "title": "<title>", "description": "<1-2 sentence recommendation>"},
+    {"priority": "low",    "title": "<title>", "description": "<1-2 sentence recommendation>"}
   ],
   "supportAreas": [
-    {"icon": "💰", "label": "Cash Flow Management", "level": "urgent"},
-    {"icon": "📋", "label": "Financial Reporting", "level": "recommended"},
-    {"icon": "📈", "label": "Growth Strategy", "level": "optional"}
+    {"icon": "💰", "label": "Cash Flow Management",   "level": "urgent"},
+    {"icon": "📋", "label": "Financial Reporting",    "level": "recommended"},
+    {"icon": "📈", "label": "Growth Strategy",        "level": "optional"}
   ],
-  "executiveSummary": "<3-4 paragraph executive summary of the business financial position>",
+  "executiveSummary": "<3-4 paragraph executive summary>",
   "keyStrengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-  "keyRisks": ["<risk 1>", "<risk 2>", "<risk 3>"]
+  "keyRisks":    ["<risk 1>",     "<risk 2>",     "<risk 3>"]
 }
 
-Important: Base your analysis on the actual document content. If data is limited (e.g. bank statements only), estimate where needed and note assumptions. Always provide useful insights even with partial data. Make sure monthly revenue/expense numbers are realistic relative to total revenue.`;
+Important: Base your analysis on the actual document content. Estimate where data is limited and note assumptions. Always provide useful insights even with partial data. Monthly revenue/expense numbers must be realistic relative to the total revenue.`;
+
+  // Build content blocks
+  let contentBlocks: Anthropic.Messages.ContentBlockParam[];
+
+  if (typeof input === 'string') {
+    // Plain text input (e.g. output from bank statement conversion)
+    contentBlocks = [
+      { type: 'text', text: `Financial Documents:\n\n${input.substring(0, 15000)}` },
+      { type: 'text', text: promptSuffix },
+    ];
+  } else {
+    // File array — send PDFs as document blocks, Excel/CSV as text
+    contentBlocks = [];
+    for (const file of input) {
+      const ext = file.filename.toLowerCase().split('.').pop() || '';
+      if (ext === 'pdf') {
+        contentBlocks.push({
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: file.buffer.toString('base64'),
+          },
+          title: file.filename,
+        } as Anthropic.Messages.DocumentBlockParam);
+      } else if (['xlsx', 'xls', 'xlsm'].includes(ext)) {
+        try {
+          const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+          let text = `=== File: ${file.filename} ===\n`;
+          workbook.SheetNames.forEach(sheetName => {
+            const sheet = workbook.Sheets[sheetName];
+            text += `\n--- Sheet: ${sheetName} ---\n`;
+            text += XLSX.utils.sheet_to_csv(sheet);
+          });
+          contentBlocks.push({ type: 'text', text: text.substring(0, 8000) });
+        } catch (e) {
+          contentBlocks.push({ type: 'text', text: `[Could not read ${file.filename}: ${e}]` });
+        }
+      } else if (ext === 'csv') {
+        contentBlocks.push({
+          type: 'text',
+          text: `=== File: ${file.filename} ===\n${file.buffer.toString('utf-8').substring(0, 8000)}`,
+        });
+      }
+    }
+    contentBlocks.push({ type: 'text', text: promptSuffix });
+  }
 
   const message = await client.messages.create({
     model: ANALYSIS_MODEL,
     max_tokens: 4096,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [{ role: 'user', content: contentBlocks }],
   });
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
 
-  // Clean up response — remove any markdown code blocks if present
+  // Strip any markdown code fences if present
   const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
   try {
